@@ -28,13 +28,25 @@
 ;; up, `M-x eval-region' to execute elisp code, and 'M-x doom/reload-font' to
 ;; refresh your font settings. If Emacs still can't find your font, it likely
 ;; wasn't installed correctly. Font issues are rarely Doom issues!
-(set-face-attribute 'default nil :height 140)
-;; (set-face-attribute 'default nil :height 240)
+;; (set-face-attribute 'default nil :height 200) ;; laptop only
+;; (set-face-attribute 'default nil :height 100)
+;; (set-face-attribute 'default nil :height 220)
+(set-face-attribute 'default nil :height 180)
+
+(set-charset-priority 'unicode)
+(setq locale-coding-system 'utf-8)
+(set-terminal-coding-system 'utf-8)
+(set-keyboard-coding-system 'utf-8)
+(set-selection-coding-system 'utf-8)
+(prefer-coding-system 'utf-8)
+(setq default-process-coding-system '(utf-8-unix . utf-8-unix))
 
 ;; There are two ways to load a theme. Both assume the theme is installed and
 ;; available. You can either set `doom-theme' or manually load a theme with the
 ;; `load-theme' function. This is the default:
-(setq doom-theme 'doom-one)
+(setq doom-theme 'doom-one-light)
+
+;; (setq doom-theme 'doom-one)
 
 ;; This determines the style of line numbers in effect. If set to `nil', line
 ;; numbers are disabled. For relative line numbers, set this to `relative'.
@@ -81,15 +93,18 @@
 
 (keymap-global-set "M-<left>" 'previous-buffer)
 (keymap-global-set "M-<right>" 'next-buffer)
-(add-hook 'after-save-hook (lambda () (lsp-format-buffer)))
 (keymap-global-set "S-<left>" 'windmove-left)
 (keymap-global-set "S-<right>" 'windmove-right)
 (keymap-global-set "S-<up>" 'windmove-up)
 (keymap-global-set "S-<down>" 'windmove-down)
+(map! :n "] e" #'flycheck-next-error)
 (setq global-display-line-numbers 'relative)
 (add-hook 'typescript-mode-hook 'deno-fmt-mode)
 (add-hook 'js2-mode-hook 'deno-fmt-mode)
 (remove-hook 'doom-first-buffer-hook #'smartparens-global-mode)
+(setq electric-pair-mode nil)
+(remove-hook 'web-mode-hook #'electric-pair-mode)
+(remove-hook 'html-mode-hook #'electric-pair-mode)
 
 (defun indent-and-go-down ()
   (interactive)
@@ -111,4 +126,287 @@
 (load! "gitea-links.el")
 (setq lsp-auto-execute-action nil)
 
-(load! "codeium.el")
+;; (load! "codeium.el")
+
+(defun format-dune-file ()
+  "Format the current Dune file using dune format-dune-file."
+  (interactive)
+  (when (eq major-mode 'dune-mode)
+    (let ((file-name (buffer-file-name)))
+      (when file-name
+        (shell-command (format "dune format-dune-file %s > %s.formatted && mv %s.formatted %s"
+                               file-name file-name file-name file-name))
+        (revert-buffer :ignore-auto :noconfirm)
+        (message "Dune file formatted successfully")))))
+
+(map! :map dune-mode-map
+      :leader
+      :desc "Format Dune file"
+      "m f" #'format-dune-file)
+
+(after! rjsx-mode
+  (define-key rjsx-mode-map "<" nil))
+
+(add-to-list 'exec-path "~/.local/bin" t)
+(setenv "PATH" (concat (expand-file-name "~/.local/bin") ":" (getenv "PATH")))
+
+;; (use-package lsp-mode
+;;   :init
+;;   :hook ((tuareg-mode . lsp)))
+;;
+;; (use-package neocaml
+;;   :vc (:url "https://github.com/bbatsov/neocaml" :rev :newest)
+;;   ;; teach Eglot about neocaml
+;;   (add-to-list 'eglot-server-programs '((neocaml-mode :language-id "ocaml") . ("ocamllsp")))
+;;   )
+
+
+;; (add-hook 'after-save-hook (lambda () (lsp-format-buffer)))
+(add-hook 'eglot-managed-mode-hook
+          (lambda ()
+            (add-hook 'before-save-hook #'eglot-format-buffer nil t)))
+
+  ;; :config
+  ;; (setq lsp-ocaml-lsp-server-command '("ocamllsp"))
+  ;; (setq lsp-lens-enable nil)  ; Disable code lens which might cause extra activity
+  ;; (setq lsp-enable-file-watchers nil)
+  ;; (setq lsp-signature-auto-activate nil)
+  ;; (setq lsp-diagnostic-package :none)  ; Try disabling diagnostics temporarily
+  ;; (setq lsp-headerline-breadcrumb-enable nil))
+
+(after! tuareg
+  (setq merlin-command "/home/sel/Documents/dg/bin/dune")
+  (setq merlin-completion-with-doc t))
+
+;; opam-switch-mode disabled in packages.el - it puts opam's dune 3.21.0
+;; in PATH, shadowing the project's dune nightly and hanging ocamllsp
+
+(after! company
+  ;; Make completion faster
+  (setq company-idle-delay 0.2)              ; Faster trigger
+  (setq company-minimum-prefix-length 2)     ; Trigger after 2 chars
+  (setq company-tooltip-limit 10)            ; Show fewer candidates
+  (setq company-show-quick-access t))        ; Quick selection
+
+(after! company-box
+  (setq company-box-enable-icon nil)         ; Disable icons (big speedup!)
+  (setq company-box-max-candidates 10)       ; Limit displayed candidates
+  (setq company-box-show-single-candidate t)
+  (setq company-box-backends-colors nil))    ; Disable colors
+
+
+(setq help-echo-kludge-around-prompt t)
+
+;; To disabled flycheck popups:
+;; (advice-add 'flycheck-popup-tip-mode :around
+;;             (lambda (orig-fun &optional arg)
+;;               "Prevent flycheck-popup-tip-mode from being enabled"
+;;               (when (and (called-interactively-p 'any) (> (or arg 1) 0))
+;;                 (funcall orig-fun arg))
+;;               (when (not (called-interactively-p 'any))
+;;                 (setq flycheck-popup-tip-mode nil))))
+
+
+;; (use-package! roll)
+
+(map! :after org
+      :map org-mode-map
+      "<M-right>" nil
+      "<M-left>" nil
+      "<S-right>" nil
+      "<S-left>" nil)
+
+(use-package! envrc
+  :hook (after-init . envrc-global-mode)) 
+
+(use-package! mlx-mode
+  :mode "\\.mlx\\'"
+  :config
+  ;; ocamllsp recognizes language id "ocaml.mlx" (not bare "mlx").
+  ;; Well projects use (merlin_reader well) → ocamlmerlin-well on PATH
+  ;; (install: well's ocamlmerlin-well + well-mlx-pp, e.g. ~/.local/bin).
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '((mlx-mode :language-id "ocaml.mlx") . ("ocamllsp"))))
+  :hook (mlx-mode . eglot-ensure))
+
+(use-package! ocaml-eglot
+  :ensure t
+  :after tuareg
+  :hook
+  (tuareg-mode . ocaml-eglot)
+  (ocaml-eglot . eglot-ensure))
+
+(use-package! eee
+  :load-path "~/Documents/eval-exec/eee.el/"
+  :config
+  (setq ee-terminal-command "kitty")
+  (map! :leader
+        :desc "Open yazi file manager"
+        "f f" #'ee-yazi))
+
+;; TSX/TS file associations - override Doom's defaults to use tree-sitter modes
+;; Remove the problematic "\\.tsx?\\'" pattern that matches both .ts and .tsx
+(setq auto-mode-alist
+      (seq-remove (lambda (x) (equal (car x) "\\.tsx?\\'")) auto-mode-alist))
+(add-to-list 'auto-mode-alist '("\\.axe\\'" . markdown-mode))
+(add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
+
+;; IDesign use-case diagram font-lock (```use-case blocks in Markdown)
+(load! "use-case-mode")
+(after! markdown-mode
+  (add-to-list 'markdown-code-lang-modes '("use-case" . use-case-mode))
+  (setq markdown-fontify-code-blocks-natively t)
+  (add-hook 'markdown-mode-hook #'use-case-mode-enable-in-markdown)
+  (add-hook 'gfm-mode-hook #'use-case-mode-enable-in-markdown))
+;; Optional: enable use-case-minor-mode in conf-toml-mode when diagrams
+;; live in `# ' comments (M-x use-case-minor-mode).
+
+;; ---------------------------------------------------------------------------
+;; TOML type shorthand snippets (bool? / string[]? / …) in Markdown ```toml
+;; blocks and in conf-toml-mode / toml-ts-mode.
+;;
+;;   bool?     -> { type = "bool", optional = true }
+;;   bool[]    -> { type = "list", of = "bool" }
+;;   bool[]?   -> { type = "list", of = "bool", optional = true }
+;;   (same for string, int, float)
+;;
+;; Trigger with TAB (yas-expand) after typing the key.
+;; ---------------------------------------------------------------------------
+(defun +toml-md-fence-lang-at-point ()
+  "Return language of the enclosing fenced code block, or nil.
+Uses markdown-mode text properties when available, else scans fences."
+  (or
+   ;; Prefer markdown-mode's own detection (needs font-lock/props).
+   (when (and (fboundp 'markdown-code-block-at-point-p)
+              (markdown-code-block-at-point-p)
+              (fboundp 'markdown-code-block-lang))
+     (save-excursion (markdown-code-block-lang)))
+   ;; Fallback: walk upward looking for ```lang / ~~~lang.
+   (save-excursion
+     (let ((origin (point))
+           (found nil))
+       (goto-char (point-min))
+       (while (and (not found)
+                   (re-search-forward
+                    (rx line-start (* blank)
+                        (group (or "```" "~~~"))
+                        (* blank)
+                        (group (* (not (any "\n")))))
+                    origin t))
+         (let* ((fence (match-string-no-properties 1))
+                (info  (string-trim (match-string-no-properties 2)))
+                (open-end (match-end 0))
+                (close-re (concat "^[ \t]*" (regexp-quote fence) "[ \t]*$")))
+           (save-excursion
+             (goto-char open-end)
+             (when (and (re-search-forward close-re nil t)
+                        (<= origin (match-beginning 0))
+                        (>= origin open-end))
+               ;; info may be "toml" or "toml title=..." — take first token
+               (setq found (car (split-string info "[ \t]+" t)))))))
+       found))))
+
+(defun +toml-md-in-toml-block-p ()
+  "Non-nil when point is inside a fenced Markdown code block tagged toml."
+  (when (derived-mode-p 'markdown-mode)
+    (let ((lang (+toml-md-fence-lang-at-point)))
+      (and lang (string-equal-ignore-case lang "toml")))))
+
+(defun +toml-type-snippet-defs (&optional condition)
+  "Build yasnippet defs for TOML type shorthands.
+CONDITION is a Lisp form evaluated at expand time (or nil)."
+  (cl-loop for type in '("bool" "string" "int" "float")
+           nconc
+           (cl-loop for (suffix template-fmt name-fmt uuid-sfx) in
+                    `(("?"  "{ type = \"%s\", optional = true }"
+                       "%s optional" "opt")
+                      ("[]" "{ type = \"list\", of = \"%s\" }"
+                       "%s list" "list")
+                      ("[]?" "{ type = \"list\", of = \"%s\", optional = true }"
+                       "%s optional list" "list-opt"))
+                    collect
+                    ;; (KEY TEMPLATE NAME CONDITION GROUP … UUID)
+                    (list (concat type suffix)
+                          (format template-fmt type)
+                          (format name-fmt type)
+                          condition
+                          '("toml-types") ; list, as after yas split-string on "#"
+                          nil nil nil
+                          (format "toml-type-%s-%s" type uuid-sfx)))))
+
+(after! yasnippet
+  ;; Markdown: only expand inside ```toml fences.
+  (yas-define-snippets 'markdown-mode
+                       (+toml-type-snippet-defs '(+toml-md-in-toml-block-p)))
+  ;; Native TOML major modes.
+  (yas-define-snippets 'conf-toml-mode
+                       (+toml-type-snippet-defs))
+  (when (fboundp 'toml-ts-mode)
+    (yas-define-snippets 'toml-ts-mode
+                         (+toml-type-snippet-defs))))
+
+(use-package! reason-mode
+  :mode "\\.re[i]?\\'"
+  :hook (reason-mode . eglot-ensure))
+
+(add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
+
+;; ---------------------------------------------------------------------------
+;; Minuet — LLM ghost-text completion (docs + code)
+;; API key: OPENROUTER_API_KEY (env or ~/.config/emacs/.local/env via `doom env`).
+;; Manual: M-i  |  accept M-a  |  dismiss M-e  |  cycle M-n / M-p
+;; ---------------------------------------------------------------------------
+(defun +minuet-openrouter-api-key ()
+  "Return OpenRouter API key for Minuet.
+Prefers process env; falls back to scraping interactive bashrc export
+(GUI Emacs / systemd daemon often never sees vars only set in interactive shells).
+Always trims whitespace — a leading newline breaks plz/curl config parsing."
+  (let ((key
+         (or (let ((k (getenv "OPENROUTER_API_KEY")))
+               (and k (not (string-empty-p (string-trim k))) k))
+             (when-let* ((bashrc (expand-file-name "~/.bashrc"))
+                         ((file-readable-p bashrc))
+                         (line (with-temp-buffer
+                                 (insert-file-contents bashrc)
+                                 (goto-char (point-min))
+                                 (when (re-search-forward
+                                        (rx bol (* space) "export" (+ space)
+                                            "OPENROUTER_API_KEY="
+                                            (or (seq ?\" (group (*? anychar)) ?\")
+                                                (seq ?\' (group (*? anychar)) ?\')
+                                                (group (+ (not (any space ?#)))))
+                                            (? (* space) (? ?# (* nonl)))
+                                            eol)
+                                        nil t)
+                                   (or (match-string 1)
+                                       (match-string 2)
+                                       (match-string 3))))))
+               line))))
+    (when key
+      (setq key (string-trim key))
+      (setenv "OPENROUTER_API_KEY" key)
+      key)))
+
+(use-package! minuet
+  :bind (("M-i" . minuet-show-suggestion)
+         :map minuet-active-mode-map
+         ("M-a" . minuet-accept-suggestion)
+         ("M-e" . minuet-dismiss-suggestion)
+         ("M-n" . minuet-next-suggestion)
+         ("M-p" . minuet-previous-suggestion))
+  :hook (minuet-active-mode . evil-normalize-keymaps)
+  :config
+  (setq minuet-provider 'openai-compatible
+        minuet-n-completions 1
+        minuet-request-timeout 2.5
+        minuet-auto-suggestion-debounce-delay 0.6
+        minuet-auto-suggestion-throttle-delay 1.5
+        minuet-context-window 8000)
+  (plist-put minuet-openai-compatible-options
+             :end-point "https://openrouter.ai/api/v1/chat/completions")
+  (plist-put minuet-openai-compatible-options :api-key #'+minuet-openrouter-api-key)
+  (plist-put minuet-openai-compatible-options
+             :model "google/gemini-3-flash-preview")
+  (minuet-set-optional-options minuet-openai-compatible-options :max_tokens 120))

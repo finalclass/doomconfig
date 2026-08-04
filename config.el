@@ -161,18 +161,20 @@
 ;;   )
 
 
-;; (add-hook 'after-save-hook (lambda () (lsp-format-buffer)))
+;; Format-on-save via eglot, except Well MLX: stock ocamlformat-mlx rejects
+;; Well syntax (e.g. type="email", class', on_*=(fun ...)). No well-aware
+;; formatter yet — skip formatting for mlx-mode.
 (add-hook 'eglot-managed-mode-hook
           (lambda ()
-            (add-hook 'before-save-hook #'eglot-format-buffer nil t)))
-
-  ;; :config
-  ;; (setq lsp-ocaml-lsp-server-command '("ocamllsp"))
-  ;; (setq lsp-lens-enable nil)  ; Disable code lens which might cause extra activity
-  ;; (setq lsp-enable-file-watchers nil)
-  ;; (setq lsp-signature-auto-activate nil)
-  ;; (setq lsp-diagnostic-package :none)  ; Try disabling diagnostics temporarily
-  ;; (setq lsp-headerline-breadcrumb-enable nil))
+            (if (derived-mode-p 'mlx-mode)
+                (progn
+                  (remove-hook 'before-save-hook #'eglot-format-buffer t)
+                  (setq-local eglot-format-buffer-function #'ignore)
+                  (setq-local eglot-ignored-server-capabilities
+                              (append '( :documentFormattingProvider
+                                         :documentRangeFormattingProvider)
+                                      eglot-ignored-server-capabilities)))
+              (add-hook 'before-save-hook #'eglot-format-buffer nil t))))
 
 (after! tuareg
   (setq merlin-command "/home/sel/Documents/dg/bin/dune")
@@ -224,11 +226,16 @@
   :config
   ;; ocamllsp recognizes language id "ocaml.mlx" (not bare "mlx").
   ;; Well projects use (merlin_reader well) → ocamlmerlin-well on PATH
-  ;; (install: well's ocamlmerlin-well + well-mlx-pp, e.g. ~/.local/bin).
+  ;; (install: well's make install → ~/.local/bin).
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '((mlx-mode :language-id "ocaml.mlx") . ("ocamllsp"))))
-  :hook (mlx-mode . eglot-ensure))
+  :hook
+  (mlx-mode . eglot-ensure)
+  ;; Belt-and-suspenders: never format-on-save Well MLX (see eglot hook above).
+  (mlx-mode . (lambda ()
+                (remove-hook 'before-save-hook #'eglot-format-buffer t)
+                (setq-local eglot-format-buffer-function #'ignore))))
 
 (use-package! ocaml-eglot
   :ensure t

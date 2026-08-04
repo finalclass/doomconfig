@@ -161,20 +161,19 @@
 ;;   )
 
 
-;; Format-on-save via eglot, except Well MLX: stock ocamlformat-mlx rejects
-;; Well syntax (e.g. type="email", class', on_*=(fun ...)). No well-aware
-;; formatter yet — skip formatting for mlx-mode.
+;; Prefer ~/.local/bin over opam for editor tooling installed by well's
+;; `make install` (ocamlformat-mlx Well patch, ocamlmerlin-well, well-mlx-pp).
+;; ocamllsp hardcodes the name "ocamlformat-mlx" and searches PATH/exec-path.
+(let ((local-bin (expand-file-name "~/.local/bin")))
+  (when (file-directory-p local-bin)
+    (setq exec-path (cons local-bin (remove local-bin exec-path)))
+    (setenv "PATH" (concat local-bin path-separator (getenv "PATH")))))
+
+;; Format-on-save via eglot (including Well MLX once well's ocamlformat-mlx
+;; is on PATH ahead of opam — see make install in the well repo).
 (add-hook 'eglot-managed-mode-hook
           (lambda ()
-            (if (derived-mode-p 'mlx-mode)
-                (progn
-                  (remove-hook 'before-save-hook #'eglot-format-buffer t)
-                  (setq-local eglot-format-buffer-function #'ignore)
-                  (setq-local eglot-ignored-server-capabilities
-                              (append '( :documentFormattingProvider
-                                         :documentRangeFormattingProvider)
-                                      eglot-ignored-server-capabilities)))
-              (add-hook 'before-save-hook #'eglot-format-buffer nil t))))
+            (add-hook 'before-save-hook #'eglot-format-buffer nil t)))
 
 (after! tuareg
   (setq merlin-command "/home/sel/Documents/dg/bin/dune")
@@ -225,17 +224,12 @@
   :mode "\\.mlx\\'"
   :config
   ;; ocamllsp recognizes language id "ocaml.mlx" (not bare "mlx").
-  ;; Well projects use (merlin_reader well) → ocamlmerlin-well on PATH
-  ;; (install: well's make install → ~/.local/bin).
+  ;; Well: merlin_reader well + ~/.local/bin/{ocamlmerlin-well,ocamlformat-mlx}
+  ;; (well's `make install`). PATH prefers ~/.local/bin — see above.
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '((mlx-mode :language-id "ocaml.mlx") . ("ocamllsp"))))
-  :hook
-  (mlx-mode . eglot-ensure)
-  ;; Belt-and-suspenders: never format-on-save Well MLX (see eglot hook above).
-  (mlx-mode . (lambda ()
-                (remove-hook 'before-save-hook #'eglot-format-buffer t)
-                (setq-local eglot-format-buffer-function #'ignore))))
+  :hook (mlx-mode . eglot-ensure))
 
 (use-package! ocaml-eglot
   :ensure t

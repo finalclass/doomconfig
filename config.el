@@ -147,33 +147,75 @@
 (after! rjsx-mode
   (define-key rjsx-mode-map "<" nil))
 
-(add-to-list 'exec-path "~/.local/bin" t)
-(setenv "PATH" (concat (expand-file-name "~/.local/bin") ":" (getenv "PATH")))
+;; Well editor tooling lives in ~/.local/bin (well's `make install`).
+;; envrc/opam often prepend $OPAM_SWITCH_PREFIX/bin and would shadow the
+;; Well-patched ocamlformat-mlx — keep local-bin first, also after envrc.
+(defun well/prefer-local-bin ()
+  "Put ~/.local/bin first on `exec-path' and PATH."
+  (let ((local-bin (expand-file-name "~/.local/bin")))
+    (when (file-directory-p local-bin)
+      (setq exec-path (cons local-bin (remove local-bin exec-path)))
+      (let* ((parts (split-string (or (getenv "PATH") "") path-separator t))
+             (parts (cons local-bin (delete local-bin parts))))
+        (setenv "PATH" (string-join parts path-separator))))))
+(well/prefer-local-bin)
+(with-eval-after-load 'envrc
+  (add-hook 'envrc-mode-hook #'well/prefer-local-bin))
 
-;; (use-package lsp-mode
-;;   :init
-;;   :hook ((tuareg-mode . lsp)))
-;;
-;; (use-package neocaml
-;;   :vc (:url "https://github.com/bbatsov/neocaml" :rev :newest)
-;;   ;; teach Eglot about neocaml
-;;   (add-to-list 'eglot-server-programs '((neocaml-mode :language-id "ocaml") . ("ocamllsp")))
-;;   )
+;; Well MLX formatter: call absolute binary. ocamllsp uses Bin.which on PATH
+;; and still hits stock opam ocamlformat-mlx when envrc wins the race.
+(defvar well/ocamlformat-mlx
+  (expand-file-name "~/.local/bin/ocamlformat-mlx")
+  "Well-patched ocamlformat-mlx (keywords + hyphen JSX attrs).")
 
+(defun well/format-mlx-buffer ()
+  "Format current .mlx buffer with Well-patched ocamlformat-mlx.
+Writes buffer to a temp file, runs the formatter (stdout = result)."
+  (interactive)
+  (unless (and well/ocamlformat-mlx (file-executable-p well/ocamlformat-mlx))
+    (user-error "Missing %s — run: cd well && make install" well/ocamlformat-mlx))
+  (let* ((input (buffer-substring-no-properties (point-min) (point-max)))
+         (tmp (make-temp-file "well-mlx-fmt-" nil ".mlx"))
+         (point-was (point))
+         (out-buf (generate-new-buffer " *well-ocamlformat-mlx*"))
+         exit)
+    (unwind-protect
+        (progn
+          (write-region input nil tmp nil 'silent)
+          ;; stdout+stderr -> out-buf; ocamlformat-mlx prints formatted code on stdout
+          (setq exit (call-process well/ocamlformat-mlx nil out-buf nil tmp))
+          (let ((out (with-current-buffer out-buf (buffer-string))))
+            (if (zerop exit)
+                (unless (string= input out)
+                  (let ((inhibit-read-only t)
+                        (inhibit-modification-hooks nil))
+                    (delete-region (point-min) (point-max))
+                    (insert out)
+                    (goto-char (min point-was (point-max)))))
+              ;; Do not block save; show error in echo area.
+              (message "well ocamlformat-mlx failed:\n%s" out))))
+      (when (buffer-live-p out-buf) (kill-buffer out-buf))
+      (ignore-errors (delete-file tmp)))))
 
-;; Prefer ~/.local/bin over opam for editor tooling installed by well's
-;; `make install` (ocamlformat-mlx Well patch, ocamlmerlin-well, well-mlx-pp).
-;; ocamllsp hardcodes the name "ocamlformat-mlx" and searches PATH/exec-path.
-(let ((local-bin (expand-file-name "~/.local/bin")))
-  (when (file-directory-p local-bin)
-    (setq exec-path (cons local-bin (remove local-bin exec-path)))
-    (setenv "PATH" (concat local-bin path-separator (getenv "PATH")))))
+(defun well/mlx-format-on-save ()
+  "before-save hook: format mlx without going through ocamllsp."
+  (when (and (derived-mode-p 'mlx-mode)
+             (file-executable-p well/ocamlformat-mlx))
+    (well/format-mlx-buffer)))
 
-;; Format-on-save via eglot (including Well MLX once well's ocamlformat-mlx
-;; is on PATH ahead of opam — see make install in the well repo).
+;; Format-on-save: .ml via eglot/ocamllsp; .mlx via absolute Well binary
+;; (wired in mlx-mode hook — not here, to avoid double-format).
 (add-hook 'eglot-managed-mode-hook
           (lambda ()
-            (add-hook 'before-save-hook #'eglot-format-buffer nil t)))
+            (if (derived-mode-p 'mlx-mode)
+                (progn
+                  (remove-hook 'before-save-hook #'eglot-format-buffer t)
+                  ;; Block ocamllsp format for mlx (PATH races with stock binary).
+                  (setq-local eglot-ignored-server-capabilities
+                              (append '( :documentFormattingProvider
+                                         :documentRangeFormattingProvider)
+                                      eglot-ignored-server-capabilities)))
+              (add-hook 'before-save-hook #'eglot-format-buffer nil t))))
 
 (after! tuareg
   (setq merlin-command "/home/sel/Documents/dg/bin/dune")
@@ -223,13 +265,16 @@
 (use-package! mlx-mode
   :mode "\\.mlx\\'"
   :config
-  ;; ocamllsp recognizes language id "ocaml.mlx" (not bare "mlx").
-  ;; Well: merlin_reader well + ~/.local/bin/{ocamlmerlin-well,ocamlformat-mlx}
-  ;; (well's `make install`). PATH prefers ~/.local/bin — see above.
+  ;; ocamllsp: language-id ocaml.mlx + merlin_reader well.
+  ;; Formatting is NOT via ocamllsp — see well/format-mlx-buffer (absolute path).
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '((mlx-mode :language-id "ocaml.mlx") . ("ocamllsp"))))
-  :hook (mlx-mode . eglot-ensure))
+  :hook
+  (mlx-mode . eglot-ensure)
+  (mlx-mode . (lambda ()
+                (well/prefer-local-bin)
+                (add-hook 'before-save-hook #'well/mlx-format-on-save nil t))))
 
 (use-package! ocaml-eglot
   :ensure t

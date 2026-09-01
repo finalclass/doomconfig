@@ -50,3 +50,23 @@
 ;; (unpin! t)
 (package! deno-fmt)
 (package! codeium :recipe (:host github :repo "Exafunction/codeium.el"))
+(package! hcl-mode)
+(package! protobuf-mode)
+(package! tuareg)
+(package! dune)
+(package! roll
+  :recipe (:local-repo "/home/sel/Documents/emacs-roll"))
+(package! nushell-mode :recipe (:host github :repo "mrkkrp/nushell-mode"))
+
+(package! envrc)
+(package! opam-switch-mode :disable t)
+(package! ocaml-eglot)
+(package! eee
+  :recipe (:host github :repo "eval-exec/eee.el"
+           :files (:defaults "*.el" "*.sh")))
+
+(package! mlx-mode
+  :recipe (:local-repo "/home/sel/Documents/emacs-mlx"))
+
+(package! reason-mode)
+(package! minuet)

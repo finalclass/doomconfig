@@ -28,10 +28,9 @@
 ;; up, `M-x eval-region' to execute elisp code, and 'M-x doom/reload-font' to
 ;; refresh your font settings. If Emacs still can't find your font, it likely
 ;; wasn't installed correctly. Font issues are rarely Doom issues!
-;; (set-face-attribute 'default nil :height 200) ;; laptop only
+(set-face-attribute 'default nil :height 140) ;; laptop only
 ;; (set-face-attribute 'default nil :height 100)
 ;; (set-face-attribute 'default nil :height 220)
-(set-face-attribute 'default nil :height 180)
 
 (set-charset-priority 'unicode)
 (setq locale-coding-system 'utf-8)
@@ -170,7 +169,9 @@
 
 (defun well/format-mlx-buffer ()
   "Format current .mlx buffer with Well-patched ocamlformat-mlx.
-Writes buffer to a temp file, runs the formatter (stdout = result)."
+Writes buffer to a temp file, runs the formatter (stdout = result).
+Passes --name with the real buffer path so ocamlformat finds the
+project .ocamlformat (temp files live under /tmp and have no root)."
   (interactive)
   (unless (and well/ocamlformat-mlx (file-executable-p well/ocamlformat-mlx))
     (user-error "Missing %s — run: cd well && make install" well/ocamlformat-mlx))
@@ -178,12 +179,18 @@ Writes buffer to a temp file, runs the formatter (stdout = result)."
          (tmp (make-temp-file "well-mlx-fmt-" nil ".mlx"))
          (point-was (point))
          (out-buf (generate-new-buffer " *well-ocamlformat-mlx*"))
+         ;; Prefer real file path so project root / .ocamlformat is detected.
+         (name (or (buffer-file-name)
+                   (expand-file-name
+                    (concat (or (buffer-name) "buffer") ".mlx")
+                    default-directory)))
+         (args (list "--name" name tmp))
          exit)
     (unwind-protect
         (progn
           (write-region input nil tmp nil 'silent)
           ;; stdout+stderr -> out-buf; ocamlformat-mlx prints formatted code on stdout
-          (setq exit (call-process well/ocamlformat-mlx nil out-buf nil tmp))
+          (setq exit (apply #'call-process well/ocamlformat-mlx nil out-buf nil args))
           (let ((out (with-current-buffer out-buf (buffer-string))))
             (if (zerop exit)
                 (unless (string= input out)
@@ -456,3 +463,10 @@ Always trims whitespace — a leading newline breaks plz/curl config parsing."
   (plist-put minuet-openai-compatible-options
              :model "google/gemini-3-flash-preview")
   (minuet-set-optional-options minuet-openai-compatible-options :max_tokens 120))
+
+(after! dired
+  (setq dired-listing-switches "-alh --group-directories-first")
+  (setq dired-use-ls-dired t))
+
+(add-hook! 'dired-mode-hook
+  (setq dired-actual-switches "-alh --group-directories-first"))

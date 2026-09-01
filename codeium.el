@@ -61,10 +61,35 @@
     (setq codeium/document/cursor_offset 'my-codeium/document/cursor_offset))
 
 ;; show completions when I want it, not always
+(defun fc/company-codeium-backend (command &optional arg &rest ignored)
+  (interactive (list 'interactive))
+  (pcase command
+    ('interactive (company-begin-backend 'fc/company-codeium-backend))
+    ('prefix (let ((capf-data (codeium-completion-at-point)))
+               (when capf-data
+                 (buffer-substring-no-properties (nth 0 capf-data) (nth 1 capf-data)))))
+    ('candidates
+     (let* ((capf-data (codeium-completion-at-point)))
+       (when capf-data
+         (nth 2 capf-data))))  ; Just return the candidates list directly
+    ('annotation (let ((capf-data (codeium-completion-at-point)))
+                  (when-let ((fn (plist-get (nthcdr 3 capf-data) :annotation-function)))
+                    (funcall fn arg))))
+    ('kind (let ((capf-data (codeium-completion-at-point)))
+            (when-let ((fn (plist-get (nthcdr 3 capf-data) :company-kind)))
+              (funcall fn arg))))
+    ('doc-buffer (let ((capf-data (codeium-completion-at-point)))
+                  (when-let ((fn (plist-get (nthcdr 3 capf-data) :company-doc-buffer)))
+                    (funcall fn arg))))
+    ('sorted t)))
+
 (defun fc/codeium-complete ()
   (interactive)
-  (let ((completion-at-point-functions (remove 'lsp-completion-at-point completion-at-point-functions)))
-    (cape-interactive #'codeium-completion-at-point)))
+  (let ((company-backends '(fc/company-codeium-backend)))
+    (company-manual-begin)))
+
+
+
 
 
 (map! :i "C-i" #'fc/codeium-complete)

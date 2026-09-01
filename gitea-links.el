@@ -41,10 +41,10 @@
 
 (defun fc-get-gitea-url ()
   (concat
-   "https://gitea.7willows.com/7willows/"
-   (fc-get-project-name)
-   "/src/commit/"
-   (fc-get-current-git-commit)
+   ;; "https://gitea.7willows.com/7willows/"
+   ;; (fc-get-project-name)
+   ;; "/src/commit/"
+   ;; (fc-get-current-git-commit)
    "/"
    (fc-get-relative-file-path)
    "#"

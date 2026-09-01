@@ -123,6 +123,7 @@
 ;; Ensure company is loaded before configuring
 
 (load! "gitea-links.el")
+(load! "md-image-paste")
 (setq lsp-auto-execute-action nil)
 
 ;; (load! "codeium.el")

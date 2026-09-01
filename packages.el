@@ -70,3 +70,6 @@
 
 (package! reason-mode)
 (package! minuet)
+
+(package! md-image-paste
+  :recipe (:host github :repo "finalclass/md-image-paste"))

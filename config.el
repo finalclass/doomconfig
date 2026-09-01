@@ -123,7 +123,7 @@
 ;; Ensure company is loaded before configuring
 
 (load! "gitea-links.el")
-(load! "md-image-paste")
+(add-hook (quote markdown-mode-hook) #'md-image-paste-default-keybindings)
 (setq lsp-auto-execute-action nil)
 
 ;; (load! "codeium.el")

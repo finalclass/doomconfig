@@ -148,8 +148,8 @@
   (define-key rjsx-mode-map "<" nil))
 
 ;; Well editor tooling lives in ~/.local/bin (well's `make install`).
-;; envrc/opam often prepend $OPAM_SWITCH_PREFIX/bin and would shadow the
-;; Well-patched ocamlformat-mlx — keep local-bin first, also after envrc.
+;; Prefer it in the default environment, but let envrc put project tools
+;; first: Dune's ocamllsp must match the project's OCaml compiler.
 (defun well/prefer-local-bin ()
   "Put ~/.local/bin first on `exec-path' and PATH."
   (let ((local-bin (expand-file-name "~/.local/bin")))
@@ -159,8 +159,6 @@
              (parts (cons local-bin (delete local-bin parts))))
         (setenv "PATH" (string-join parts path-separator))))))
 (well/prefer-local-bin)
-(with-eval-after-load 'envrc
-  (add-hook 'envrc-mode-hook #'well/prefer-local-bin))
 
 ;; Well MLX formatter: call absolute binary. ocamllsp uses Bin.which on PATH
 ;; and still hits stock opam ocamlformat-mlx when envrc wins the race.
